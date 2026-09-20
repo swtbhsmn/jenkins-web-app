@@ -13,10 +13,13 @@ webapp/
 │   └── main.py          # FastAPI application & /health endpoint
 ├── tests/
 │   ├── __init__.py
-│   └── test_health.py   # Automated pytest suite
+│   └── test_health.py   # Automated unit tests
 ├── .dockerignore
+├── .gitignore
 ├── Dockerfile           # Production container build with healthcheck
 ├── docker-compose.yml   # Multi-container orchestration & service definition
+├── Jenkinsfile          # Declarative CI/CD pipeline
+├── Makefile             # Convenient development & docker shortcuts
 ├── requirements.txt     # Dependencies
 └── README.md
 ```
