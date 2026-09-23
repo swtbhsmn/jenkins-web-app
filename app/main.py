@@ -34,7 +34,7 @@ def health_check():
     )
 
 @app.get("/users", response_model=HealthResponse, tags=["Monitoring"])
-def health_check():
+def get_users():
     return UserResponse(
         status="healthy",
         timestamp=datetime.now(timezone.utc).isoformat(),
