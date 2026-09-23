@@ -1,6 +1,6 @@
 import unittest
 from datetime import datetime
-from app.main import app, health_check, read_root
+from app.main import app, get_users, health_check, read_root
 
 class TestHealthEndpoint(unittest.TestCase):
     def test_read_root(self):
@@ -14,10 +14,18 @@ class TestHealthEndpoint(unittest.TestCase):
         dt = datetime.fromisoformat(result.timestamp)
         self.assertIsNotNone(dt)
 
+    def test_get_users(self):
+        result = get_users()
+        self.assertEqual(result.status, "healthy")
+        self.assertEqual(result.data, [{"name": "Swetabh"}])
+        dt = datetime.fromisoformat(result.timestamp)
+        self.assertIsNotNone(dt)
+
     def test_routes_registered(self):
         routes = [route.path for route in app.routes]
         self.assertIn("/", routes)
         self.assertIn("/health", routes)
+        self.assertIn("/users", routes)
 
 if __name__ == "__main__":
     unittest.main()

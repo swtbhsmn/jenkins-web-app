@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from typing import Any
 from fastapi import FastAPI
 from pydantic import BaseModel
 
@@ -14,10 +15,11 @@ class HealthResponse(BaseModel):
     timestamp: str
     service: str
 
+
 class UserResponse(BaseModel):
     status: str
     timestamp: str
-    data: list[any]
+    data: list[Any]
 
 
 @app.get("/", tags=["General"])
