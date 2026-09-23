@@ -151,84 +151,84 @@ pipeline {
             }
         }
 
-        stage('Deploy to Production (EC2)') {
-            steps {
-                echo "=== Deploying to Production EC2 (${EC2_IP}) ==="
-                withCredentials([sshUserPrivateKey(credentialsId: "${EC2_SSH_KEY_CRED_ID}", keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER')]) {
-                    sh """
-                        ssh -o StrictHostKeyChecking=no -i \${SSH_KEY} \${SSH_USER}@${EC2_IP} "bash -s" << 'REMOTE_DEPLOY'
-                            set -e
-                            REGION="${AWS_REGION}"
-                            REGISTRY="${ECR_REGISTRY}"
-                            IMAGE="${ECR_IMAGE_URI}:${IMAGE_TAG}"
-                            CONTAINER="${PROD_CONTAINER}"
-                            PORT="${PROD_PORT}"
+//         stage('Deploy to Production (EC2)') {
+//             steps {
+//                 echo "=== Deploying to Production EC2 (${EC2_IP}) ==="
+//                 withCredentials([sshUserPrivateKey(credentialsId: "${EC2_SSH_KEY_CRED_ID}", keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER')]) {
+//                     sh """
+//                         ssh -o StrictHostKeyChecking=no -i \${SSH_KEY} \${SSH_USER}@${EC2_IP} "bash -s" << 'REMOTE_DEPLOY'
+//                             set -e
+//                             REGION="${AWS_REGION}"
+//                             REGISTRY="${ECR_REGISTRY}"
+//                             IMAGE="${ECR_IMAGE_URI}:${IMAGE_TAG}"
+//                             CONTAINER="${PROD_CONTAINER}"
+//                             PORT="${PROD_PORT}"
 
-                            echo "=========================================================="
-                            echo " Step 1: Authenticate EC2 Docker with AWS ECR"
-                            echo "=========================================================="
-                            aws ecr get-login-password --region "\$REGION" | docker login --username AWS --password-stdin "\$REGISTRY"
+//                             echo "=========================================================="
+//                             echo " Step 1: Authenticate EC2 Docker with AWS ECR"
+//                             echo "=========================================================="
+//                             aws ecr get-login-password --region "\$REGION" | docker login --username AWS --password-stdin "\$REGISTRY"
 
-                            echo "=========================================================="
-                            echo " Step 2: Pull new production image (\$IMAGE)"
-                            echo "=========================================================="
-                            docker pull "\$IMAGE"
+//                             echo "=========================================================="
+//                             echo " Step 2: Pull new production image (\$IMAGE)"
+//                             echo "=========================================================="
+//                             docker pull "\$IMAGE"
 
-                            echo "=========================================================="
-                            echo " Step 3: Stop and remove old container (\$CONTAINER)"
-                            echo "=========================================================="
-                            docker stop "\$CONTAINER" 2>/dev/null || true
-                            docker rm "\$CONTAINER" 2>/dev/null || true
+//                             echo "=========================================================="
+//                             echo " Step 3: Stop and remove old container (\$CONTAINER)"
+//                             echo "=========================================================="
+//                             docker stop "\$CONTAINER" 2>/dev/null || true
+//                             docker rm "\$CONTAINER" 2>/dev/null || true
 
-                            echo "=========================================================="
-                            echo " Step 4: Run new container with restart policy"
-                            echo "=========================================================="
-                            docker run -d \\
-                                --name "\$CONTAINER" \\
-                                -p "\$PORT":8000 \\
-                                --restart unless-stopped \\
-                                -e ENVIRONMENT=production \\
-                                "\$IMAGE"
+//                             echo "=========================================================="
+//                             echo " Step 4: Run new container with restart policy"
+//                             echo "=========================================================="
+//                             docker run -d \\
+//                                 --name "\$CONTAINER" \\
+//                                 -p "\$PORT":8000 \\
+//                                 --restart unless-stopped \\
+//                                 -e ENVIRONMENT=production \\
+//                                 "\$IMAGE"
 
-                            echo "=========================================================="
-                            echo " Step 5: Test health endpoint on production"
-                            echo "=========================================================="
-                            sleep 3
-                            HEALTH_OK=0
-                            for i in \$(seq 1 10); do
-                                if curl -fsS http://localhost:"\$PORT"/health; then
-                                    echo ""
-                                    echo "Production Health Check: PASSED on attempt \$i!"
-                                    HEALTH_OK=1
-                                    break
-                                fi
-                                echo "Waiting for service to be healthy (attempt \$i/10)..."
-                                sleep 2
-                            done
+//                             echo "=========================================================="
+//                             echo " Step 5: Test health endpoint on production"
+//                             echo "=========================================================="
+//                             sleep 3
+//                             HEALTH_OK=0
+//                             for i in \$(seq 1 10); do
+//                                 if curl -fsS http://localhost:"\$PORT"/health; then
+//                                     echo ""
+//                                     echo "Production Health Check: PASSED on attempt \$i!"
+//                                     HEALTH_OK=1
+//                                     break
+//                                 fi
+//                                 echo "Waiting for service to be healthy (attempt \$i/10)..."
+//                                 sleep 2
+//                             done
 
-                            if [ "\$HEALTH_OK" -ne 1 ]; then
-                                echo ""
-                                echo "Production Health Check: FAILED! Container logs:"
-                                docker logs "\$CONTAINER"
-                                exit 1
-                            fi
+//                             if [ "\$HEALTH_OK" -ne 1 ]; then
+//                                 echo ""
+//                                 echo "Production Health Check: FAILED! Container logs:"
+//                                 docker logs "\$CONTAINER"
+//                                 exit 1
+//                             fi
 
-                            echo "=========================================================="
-                            echo " Step 6: Prune old unused images from EC2"
-                            echo "=========================================================="
-                            docker image prune -af --filter "until=48h" 2>/dev/null || true
+//                             echo "=========================================================="
+//                             echo " Step 6: Prune old unused images from EC2"
+//                             echo "=========================================================="
+//                             docker image prune -af --filter "until=48h" 2>/dev/null || true
 
-                            echo "=========================================================="
-                            echo " SUCCESS: Deployment Verified on Production!"
-                            echo " Container:  \$CONTAINER"
-                            echo " Image:      \$IMAGE"
-                            echo " Port:       \$PORT"
-                            echo "=========================================================="
-REMOTE_DEPLOY
-                    """
-                }
-            }
-        }
+//                             echo "=========================================================="
+//                             echo " SUCCESS: Deployment Verified on Production!"
+//                             echo " Container:  \$CONTAINER"
+//                             echo " Image:      \$IMAGE"
+//                             echo " Port:       \$PORT"
+//                             echo "=========================================================="
+// REMOTE_DEPLOY
+//                     """
+//                 }
+//             }
+//         }
     }
 
     post {
@@ -245,7 +245,6 @@ REMOTE_DEPLOY
  FastAPI service deployed and healthy!
  Version:    ${IMAGE_TAG}
  Registry:   ${ECR_IMAGE_URI}:${IMAGE_TAG}
- Production: http://${EC2_IP}:${PROD_PORT}/health
 ======================================================================
             """
         }

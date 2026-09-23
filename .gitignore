@@ -72,3 +72,13 @@ cover/
 *.sqlite
 *.sqlite3
 
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfplan
+*tfplan*
+
+
