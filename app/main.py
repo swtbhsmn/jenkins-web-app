@@ -33,7 +33,7 @@ def health_check():
         service="fastapi-webapp",
     )
 
-@app.get("/users", response_model=HealthResponse, tags=["Monitoring"])
+@app.get("/users", response_model=UserResponse, tags=["user"])
 def get_users():
     return UserResponse(
         status="healthy",
