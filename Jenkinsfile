@@ -15,11 +15,11 @@ pipeline {
         ECR_REGISTRY        = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
         ECR_IMAGE_URI       = "${ECR_REGISTRY}/${ECR_REPO_NAME}"
 
-        // Production EC2 Configuration (customize with your EC2 server details)
-        EC2_IP              = '34.227.194.70'          // EC2 Public IP or DNS
-        EC2_SSH_KEY_CRED_ID = 'ec2-ssh-key'                 // Jenkins SSH Username with private key credential ID
-        PROD_CONTAINER      = 'fastapi-webapp-prod'
-        PROD_PORT           = '80'
+        // AWS ECS & ALB Configuration
+        ECS_CLUSTER_NAME    = 'fastapi-cluster'
+        ECS_SERVICE_NAME    = 'fastapi-service'
+        ALB_DNS_NAME        = 'fastapi-webapp-alb-1756299987.us-east-1.elb.amazonaws.com'
+        ALB_URL             = "http://${ALB_DNS_NAME}"
     }
 
     options {
@@ -150,85 +150,54 @@ pipeline {
                 }
             }
         }
+        stage('Deploy to AWS ECS') {
+            steps {
+                echo "=== Deploying to AWS ECS: ${ECS_SERVICE_NAME} on cluster ${ECS_CLUSTER_NAME} ==="
+                withCredentials([
+                    string(credentialsId: 'AWS_JENKINS_ACCESS_KEY', variable: 'AWS_ACCESS_KEY_ID'),
+                    string(credentialsId: 'AWS_JENKINS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
+                ]) {
+                    sh """
+                        # Trigger ECS rolling deployment
+                        echo "Triggering new ECS deployment for service '\${ECS_SERVICE_NAME}' in region \${AWS_REGION}..."
+                        aws ecs update-service \\
+                            --cluster "\${ECS_CLUSTER_NAME}" \\
+                            --service "\${ECS_SERVICE_NAME}" \\
+                            --force-new-deployment \\
+                            --region "\${AWS_REGION}"
 
-//         stage('Deploy to Production (EC2)') {
-//             steps {
-//                 echo "=== Deploying to Production EC2 (${EC2_IP}) ==="
-//                 withCredentials([sshUserPrivateKey(credentialsId: "${EC2_SSH_KEY_CRED_ID}", keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER')]) {
-//                     sh """
-//                         ssh -o StrictHostKeyChecking=no -i \${SSH_KEY} \${SSH_USER}@${EC2_IP} "bash -s" << 'REMOTE_DEPLOY'
-//                             set -e
-//                             REGION="${AWS_REGION}"
-//                             REGISTRY="${ECR_REGISTRY}"
-//                             IMAGE="${ECR_IMAGE_URI}:${IMAGE_TAG}"
-//                             CONTAINER="${PROD_CONTAINER}"
-//                             PORT="${PROD_PORT}"
+                        # Wait for deployment to reach steady state
+                        echo "Waiting for ECS service to reach steady state..."
+                        aws ecs wait services-stable \\
+                            --cluster "\${ECS_CLUSTER_NAME}" \\
+                            --services "\${ECS_SERVICE_NAME}" \\
+                            --region "\${AWS_REGION}"
 
-//                             echo "=========================================================="
-//                             echo " Step 1: Authenticate EC2 Docker with AWS ECR"
-//                             echo "=========================================================="
-//                             aws ecr get-login-password --region "\$REGION" | docker login --username AWS --password-stdin "\$REGISTRY"
+                        echo "ECS service successfully deployed and stable!"
 
-//                             echo "=========================================================="
-//                             echo " Step 2: Pull new production image (\$IMAGE)"
-//                             echo "=========================================================="
-//                             docker pull "\$IMAGE"
+                        # Verify ALB health check endpoint
+                        echo "Verifying application health via ALB: \${ALB_URL}/health..."
+                        HEALTH_OK=0
+                        for i in \$(seq 1 15); do
+                            if curl -fsS "\${ALB_URL}/health"; then
+                                echo ""
+                                echo "ALB Health Check: PASSED on attempt \$i!"
+                                HEALTH_OK=1
+                                break
+                            fi
+                            echo "Waiting for service to become healthy (attempt \$i/15)..."
+                            sleep 10
+                        done
 
-//                             echo "=========================================================="
-//                             echo " Step 3: Stop and remove old container (\$CONTAINER)"
-//                             echo "=========================================================="
-//                             docker stop "\$CONTAINER" 2>/dev/null || true
-//                             docker rm "\$CONTAINER" 2>/dev/null || true
-
-//                             echo "=========================================================="
-//                             echo " Step 4: Run new container with restart policy"
-//                             echo "=========================================================="
-//                             docker run -d \\
-//                                 --name "\$CONTAINER" \\
-//                                 -p "\$PORT":8000 \\
-//                                 --restart unless-stopped \\
-//                                 -e ENVIRONMENT=production \\
-//                                 "\$IMAGE"
-
-//                             echo "=========================================================="
-//                             echo " Step 5: Test health endpoint on production"
-//                             echo "=========================================================="
-//                             sleep 3
-//                             HEALTH_OK=0
-//                             for i in \$(seq 1 10); do
-//                                 if curl -fsS http://localhost:"\$PORT"/health; then
-//                                     echo ""
-//                                     echo "Production Health Check: PASSED on attempt \$i!"
-//                                     HEALTH_OK=1
-//                                     break
-//                                 fi
-//                                 echo "Waiting for service to be healthy (attempt \$i/10)..."
-//                                 sleep 2
-//                             done
-
-//                             if [ "\$HEALTH_OK" -ne 1 ]; then
-//                                 echo ""
-//                                 echo "Production Health Check: FAILED! Container logs:"
-//                                 docker logs "\$CONTAINER"
-//                                 exit 1
-//                             fi
-
-//                             echo "=========================================================="
-//                             echo " Step 6: Prune old unused images from EC2"
-//                             echo "=========================================================="
-//                             docker image prune -af --filter "until=48h" 2>/dev/null || true
-
-//                             echo "=========================================================="
-//                             echo " SUCCESS: Deployment Verified on Production!"
-//                             echo " Container:  \$CONTAINER"
-//                             echo " Image:      \$IMAGE"
-//                             echo " Port:       \$PORT"
-//                             echo "=========================================================="
-// REMOTE_DEPLOY
-//                     """
-//                 }
-//             }
-//         }
+                        if [ "\$HEALTH_OK" -ne 1 ]; then
+                            echo ""
+                            echo "ALB Health Check: FAILED! Application did not respond with 200 OK."
+                            exit 1
+                        fi
+                    """
+                }
+            }
+        }
     }
 
     post {
@@ -242,9 +211,11 @@ pipeline {
             echo """
 ======================================================================
  PIPELINE SUCCESSFUL
- FastAPI service deployed and healthy!
+ FastAPI service deployed to AWS ECS and healthy!
  Version:    ${IMAGE_TAG}
  Registry:   ${ECR_IMAGE_URI}:${IMAGE_TAG}
+ URL:        ${ALB_URL}
+ Health:     ${ALB_URL}/health
 ======================================================================
             """
         }

@@ -14,6 +14,11 @@ class HealthResponse(BaseModel):
     timestamp: str
     service: str
 
+class UserResponse(BaseModel):
+    status: str
+    timestamp: str
+    data: list[any]
+
 
 @app.get("/", tags=["General"])
 def read_root():
@@ -28,3 +33,10 @@ def health_check():
         service="fastapi-webapp",
     )
 
+@app.get("/users", response_model=HealthResponse, tags=["Monitoring"])
+def health_check():
+    return UserResponse(
+        status="healthy",
+        timestamp=datetime.now(timezone.utc).isoformat(),
+        data=[{"name":"Swetabh"}]
+    )
